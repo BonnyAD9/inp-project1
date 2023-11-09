@@ -1,7 +1,7 @@
 #------------------------------------------------------------------------------------------------------------
 # V teto casti jsou zakladni testy, ktere jsou soucasti zadani
 # ===========================================================================================================
-# Zasah do teto casti neni dovolen. V pripade, ze potrebujete otestovat funkcnost lepe, zduplikujte si kod 
+# Zasah do teto casti neni dovolen. V pripade, ze potrebujete otestovat funkcnost lepe, zduplikujte si kod
 # testu do uzivatelske casti tohoto skriptu a dopiste pozadovanou funkcionalitu
 #------------------------------------------------------------------------------------------------------------
 
@@ -21,14 +21,14 @@ async def test_reset(dut):
     assert (dut.ready.value.binstr == '0'), "Invalid ready value"
     assert ((dut.data_en.value.binstr == '0') or ((dut.data_en.value.binstr == '1') and (dut.data_rdwr.value.binstr == '0'))), "Processor should read from the memory"
     assert (dut.in_req.value.binstr == '0'), "Can't request for input data"
-    assert (dut.out_we.value.binstr == '0'), "Can't write to the output" 
+    assert (dut.out_we.value.binstr == '0'), "Can't write to the output"
 
 @tb_test()
 async def test_init(dut):
     """Procesor initialization test"""
     instcnt, mem, _ = await run_program(dut, '@')
     assert (dut.ready.value.binstr == '1'), "Invalid ready value, should be active"
-    
+
 
 @tb_test()
 async def test_increment(dut):
@@ -89,7 +89,7 @@ async def test_break(dut):
 async def test_login(dut, uid=''):
     """Executes program in login.b file"""
     file_name = '../src/login.b'
-    assert os.path.isfile(file_name), "File login.b is missing" 
+    assert os.path.isfile(file_name), "File login.b is missing"
     with open(file_name,'rt') as f:
         prog = f.read()
     assert len(prog), "File login.b doesn't contain any program"
@@ -101,7 +101,7 @@ async def test_login(dut, uid=''):
 #-------------------------------------------------------------------------------------------------------
 # Uzivatelske testy
 # ===========================================================================================================
-# V teto casti muzete v pripade potreby vlozit jakekoliv vlastni testy. 
+# V teto casti muzete v pripade potreby vlozit jakekoliv vlastni testy.
 #-------------------------------------------------------------------------------------------------------
 
 

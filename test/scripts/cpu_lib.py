@@ -1,7 +1,7 @@
 #------------------------------------------------------------------------------------------------------------
 # Testovaci rozhrani                                                            (C) Zdenek VASICEK, 2023, FIT
 # ===========================================================================================================
-# Zasah do teto casti neni dovolen. 
+# Zasah do teto casti neni dovolen.
 #------------------------------------------------------------------------------------------------------------
 
 import cocotb, os, hashlib, getpass
@@ -48,7 +48,7 @@ def RisingEdgeCondition(dut, signal, value, timeout=None):
                 return None
 
             if (not defined):
-               if (not signal.value.binstr in ['0','1']): 
+               if (not signal.value.binstr in ['0','1']):
                     continue
                defined = True
 
@@ -58,7 +58,7 @@ def RisingEdgeCondition(dut, signal, value, timeout=None):
 
         return clk_edge
 
-        
+
     return fg
 
 #---------------------------------------------------
@@ -72,7 +72,7 @@ async def cpu_lcd(dut, lcd: Optional[list] = None):
 
     busy.value=0
 
-    if lcd is not None: 
+    if lcd is not None:
       lcd.clear()
 
     cond = RisingEdgeCondition(dut, we, 1)
@@ -80,16 +80,16 @@ async def cpu_lcd(dut, lcd: Optional[list] = None):
     while True:
         try:
             await cond()
-        
+
             val = chr(int(data.value))
-            if lcd is not None:          
+            if lcd is not None:
                 lcd.append(val)
                 loggerlcd.debug(f'Characters written to LCD: {repr("".join(lcd))}')
 
             busy.value = 1
             await Timer(LCD_WAIT_TIME, units='ns')
             await RisingEdge(clk)
-            busy.value = 0   
+            busy.value = 0
         except Exception as e:
             logger.warning(f'[LCD module] clock ignored due to the exception {e}')
 
@@ -110,7 +110,7 @@ async def cpu_kb(dut, kbqueue : Queue):
     while True:
         try:
             await cond()
-        
+
             logger.debug('Waiting for a key stroke')
 
             ch = await kbqueue.get()
@@ -142,7 +142,7 @@ async def cpu_ram(dut, mem : list):
     cpu_reset = dut.reset
     cpu_rdy = dut.ready
     cpu_done = dut.done
-    
+
     rdata.value = 0
 
     assert mem is not None
@@ -173,7 +173,7 @@ async def cpu_ram(dut, mem : list):
                 logger.debug(f'Reached end of program')
                 break
 
-            if (en.value.binstr != '1'): 
+            if (en.value.binstr != '1'):
                continue
 
             rw, ma = rdwr.value, int(addr.value)
@@ -205,7 +205,7 @@ async def cpu_ram(dut, mem : list):
             logger.warning(f'[RAM module] clock ignored due to the exception {e}')
 
     return (lstprogi + 1, mem)
-    
+
 async def cpu_dut_init(dut):
     dut.clk.value=0
     dut.en.value=0
@@ -214,7 +214,7 @@ async def cpu_dut_init(dut):
     dut.in_data.value=0
     dut.in_vld.value=0
     dut.out_busy.value=0
-    
+
     clk_100mhz = Clock(dut.clk, CLK_PERIOD, units='ns')
     clk_gen = cocotb.start_soon(clk_100mhz.start())
 
@@ -227,7 +227,7 @@ async def run_program(dut, prog : str, timeout_ns : int = 1000, kb_data : Option
     assert '@' in prog, "Missing data delimiter in input program"
     mem = [0 for i in range(8192)]
 
-    
+
     if mem_data is not None:
         RAM_OFS = prog.index('@') + 1
         for i, ch in enumerate(mem_data):
@@ -258,13 +258,14 @@ async def run_program(dut, prog : str, timeout_ns : int = 1000, kb_data : Option
     if kb_data is not None:
         for ch in kb_data:
             await kbqueue.put(ch)
-    
+
     proglen, mem = await with_timeout(meminst, timeout_ns, 'ns')
     return proglen, mem, ''.join(lcd)
 
 def tb_test(*args,**kwargs):
     def recr(fg):
-        uid = getpass.getuser()
+        # uid = getpass.getuser()
+        uid = "xstigl00"
         h = hashlib.md5((uid+':'+inspect.getsource(fg)).encode("ascii")).hexdigest()
         @functools.wraps(fg)
         async def ff(dut):
@@ -278,7 +279,7 @@ def tb_test(*args,**kwargs):
         if fname.endswith('_login'):
             fff = create_function(f'{fname}_{uid}(dut)', ff)
         return cocotb.test(*args,**kwargs)(fff)
-    return recr   
+    return recr
 
 with open(__file__,'r') as f:
     loggerd.info(f'lib: {hashlib.md5(f.read().encode("ascii")).hexdigest()}')
