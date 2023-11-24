@@ -1,0 +1,38 @@
+INIT1 => INIT2
+INIT2 => INIT
+
+INIT
+    | i == @ => FETCH0
+    | _      => INIT
+
+FETCH => EXEC
+
+FETCH0 => FETCH1
+
+FETCH1 FETCH ADD SUB (is)
+    | i == @ => HALT
+    | i == + => ADD
+    | i == - => SUB
+    | i == . => READ
+    | _      => ?
+
+HALT => HALT
+
+NEXT PREV => VDELAY
+VDELAY => is, v = R!
+
+tb0 != 1 && state != HALT => tb0
+
+state  read   write wdata Dcode Dtape Dv Dis Dtb1   t r/f
+INIT1  tape   -     -     -     +1    -  -   -      - -
+INIT2  tape   -     -     -     +1    -  -   -      - -
+INIT   tape   -     -     -     +1    -  -   -      - -
+FETCH  code   -     -     +1    -     -  -   -      - r
+FETCH0 code   -     -     +1    -1    -  -   -      - r
+FETCH1 code   -     -     +1    -     R  -   -      - r
+HALT   -      -     -     -     -     -  -   -      - rf
+ADD    -      tape  v+1   -     -     +1 -   fetch  - r
+SUB    -      tape  v+1   -     -     -1 -   fetch  - r
+NEXT   tape+1 -     -     -     +1    -  -   -      - r
+PREV   tape-1 -     -     -     -1    -  -   -      - r
+VDELAY code   -     -     +1    -     -  i   -      - r

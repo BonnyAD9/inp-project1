@@ -66,165 +66,218 @@ end cpu;
 architecture behavioral of cpu is
 
     type State_t is (
+        S_INIT,
         S_SCAN,
+        S_READ_TAPE,
+        S_READ_TAPE_WAIT,
         S_HALT,
         S_FETCH,
-        S_DECODE,
+        S_NEXT,
+        S_NEXT_WAIT,
+        S_PREV,
+        S_PREV_WAIT,
+        S_INC,
+        S_DEC,
         S_JMPF,
         S_JMPB,
-        S_OUT,
-        S_IN,
+        S_PRINT,
+        S_WAIT_PRINT,
+        S_READ,
+        S_WAIT_READ
     );
 
     type Instruction_t is (
-        I_NEXT,    -- '>'
-        I_PREV,    -- '<'
-        I_INC,     -- '+'
-        I_DEC,     -- '-'
-        I_IFEZ,    -- '['
-        I_IFNZ,    -- ']'
-        I_BREAK,   -- '~'
-        I_PRINT,   -- '.'
-        I_READ,    -- ','
-        I_TAPE,    -- '@'
-        I_COMMENT, -- other
+        I_NEXT,   -- '>'
+        I_PREV,   -- '<'
+        I_INC,    -- '+'
+        I_DEC,    -- '-'
+        I_IFEZ,   -- '['
+        I_IFNZ,   -- ']'
+        I_BREAK,  -- '~'
+        I_PRINT,  -- '.'
+        I_READ,   -- ','
+        I_TAPE,   -- '@'
+        I_COMMENT -- other
     );
 
     signal state      : State_t;
     signal decoded    : Instruction_t;
     signal decode     : std_logic;
-    signal read_tape  : std_logic;
     signal value      : std_logic_vector(7  downto 0);
     signal tape_index : std_logic_vector(12 downto 0);
     signal code_index : std_logic_vector(12 downto 0);
 begin
     -- FSM
-    process (CLK, RST, EN) is
+    process (CLK, RESET, EN) is
         variable next_state : State_t;
+        variable next_value  : std_logic_vector(7 downto 0);
     begin
-        if RST = '1' then
-            state <= SCAN;
+        if RESET = '1' then
+            state <= S_INIT;
             DATA_EN <= '0';
             IN_REQ <= '0';
             OUT_WE <= '0';
-            tape_index <= 0;
-            code_index <= 0;
+            tape_index <= "0000000000000";
+            code_index <= "0000000000000";
             decode <= '0';
+            DONE <= '0';
+            READY <= '0';
         elsif rising_edge(CLK) and EN = '1' then
             next_state := state;
+            next_value := value;
 
             DATA_ADDR <= code_index;
             DATA_EN <= '1';
             DATA_RDWR <= '0';
             IN_REQ <= '0';
-            OUT_DATA <= value;
+            OUT_DATA <= next_value;
             OUT_WE <= '0';
             READY <= '1';
             DONE <= '0';
             decode <= '0';
-            read_tape <= '0';
 
             case state is
+                when S_INIT =>
                 when S_SCAN =>
                     if decoded = I_TAPE then
-                        next_state := S_FETCH;
+                        next_state := S_READ_TAPE;
                     end if;
                 when S_FETCH =>
-                    next_state := S_DECODE;
-                when S_DECODE =>
+                    case decoded is
+                        when I_NEXT =>
+                            next_state := S_NEXT;
+                        when I_PREV =>
+                            next_state := S_PREV;
+                        when I_INC =>
+                            next_state := S_INC;
+                        when I_DEC =>
+                            next_state := S_DEC;
+                        when I_IFEZ =>
+                            next_state := S_JMPF;
+                        when I_IFNZ =>
+                            next_state := S_JMPB;
+                        when I_BREAK =>
+                            next_state := S_JMPF;
+                        when I_PRINT =>
+                            if OUT_BUSY = '1' then
+                                next_state := S_WAIT_PRINT;
+                            else
+                                next_state := S_PRINT;
+                            end if;
+                        when I_READ =>
+                            next_state := S_WAIT_READ;
+                        when I_TAPE =>
+                            next_state := S_HALT;
+                        when I_COMMENT =>
+                            next_state := S_FETCH;
+                    end case;
+                when S_JMPF =>
+                    if decoded = I_IFNZ then
+                        next_state := S_FETCH;
+                    end if;
+                when S_JMPB =>
+                    if decoded = I_IFEZ then
+                        next_state := S_FETCH;
+                    end if;
+                when S_WAIT_PRINT =>
+                    if OUT_BUSY = '0' then
+                        next_state := S_PRINT;
+                    end if;
+                when S_WAIT_READ =>
+                    if IN_VLD = '1' then
+                        next_state := S_READ;
+                    end if;
+                when S_NEXT =>
+                    next_state := S_NEXT_WAIT;
+                when S_PREV =>
+                    next_state := S_PREV;
+                when S_READ_TAPE_WAIT =>
+                    next_state := S_READ_TAPE;
+                when S_READ_TAPE | S_NEXT_WAIT | S_PREV_WAIT =>
+                    next_value := DATA_RDATA;
                     next_state := S_FETCH;
+                when S_INC | S_DEC | S_PRINT | S_READ =>
+                    next_state := S_FETCH;
+                when S_HALT =>
             end case;
 
             case next_state is
-                when S_SCAN =>
+                when S_INIT =>
+                    next_state := S_SCAN;
                     decode <= '1';
                     DATA_ADDR <= tape_index;
+                when S_SCAN =>
+                    decode <= '1';
+                    DATA_ADDR <= tape_index + 1;
                     tape_index <= tape_index + 1;
+                when S_READ_TAPE =>
+                    DATA_ADDR <= tape_index;
+                when S_HALT =>
+                    DATA_EN <= '0';
+                    DONE <= '1';
                 when S_FETCH =>
                     decode <= '1';
                     code_index <= code_index + 1;
-                when S_DECODE =>
-                    case decoded is
-                        when I_NEXT =>
-                            read_tape <= '1';
-                            tape_index <= tape_index + 1;
-                            DATA_ADDR <= tape_index + 1;
-                        when I_PREV =>
-                            read_tape <= '1';
-                            tape_index <= tape_index - 1;
-                            DATA_ADDR <= tape_index - 1;
-                        when I_INC =>
-                            value <= value + 1;
-                            DATA_WDATA <= value + 1;
-                            DATA_ADDR <= tape_index;
-                            DATA_RDWR <= '1';
-                        when I_DEC =>
-                            value <= value - 1;
-                            DATA_WDATA <= value - 1;
-                            DATA_ADDR <= tape_index;
-                            DATA_RDWR <= '1';
-                        when I_IFEZ =>
-                            if value = 0 then
-                                code_index <= code_index + 1;
-                                next_state := S_JMPF;
-                                decode <= '1';
-                            end if;
-                        when I_IFNZ =>
-                            if value /= 0 then
-                                next_state := S_JMPB;
-                                DATA_ADDR <= code_index - 2;
-                                code_index <= code_index - 1;
-                            end if;
-                        when I_BREAK =>
-                            code_index <= code_index + 1;
-                            next_state := S_JMPF;
-                            decode <= '1';
-                        when I_PRINT =>
-                            if OUT_BUSY = '0' then
-                                OUT_WE <= '1';
-                            else
-                                next_state := S_OUT;
-                            end if;
-                        when I_READ =>
-                            IN_REQ <= '1';
-                            next_state := S_IN;
-                        when I_TAPE =>
-                            next_state := S_HALT;
-                            DONE <= '1';
-                        when I_COMMENT:
-                            decode <= '1';
-                            code_index <= code_index + 1;
-                            next_state := I_FETCH;
-                    end case;
+                when S_NEXT =>
+                    decode <= '1';
+                    tape_index <= tape_index + 1;
+                    DATA_ADDR <= tape_index + 1;
+                when S_PREV =>
+                    tape_index <= tape_index + 1;
+                    DATA_ADDR <= tape_index + 1;
+                when S_INC =>
+                    next_value := next_value + 1;
+                    DATA_WDATA <= next_value;
+                    DATA_RDWR <= '1';
+                    DATA_ADDR <= tape_index;
+                when S_DEC =>
+                    next_value := next_value - 1;
+                    DATA_WDATA <= next_value;
+                    DATA_RDWR <= '1';
+                    DATA_ADDR <= tape_index;
+                when S_JMPF =>
+                    decode <= '1';
+                    code_index <= code_index + 1;
+                when S_JMPB =>
+                    decode <= '1';
+                    code_index <= code_index - 1;
+                    DATA_ADDR <= code_index - 2;
+                when S_PRINT =>
+                    OUT_WE <= '1';
+                    decode <= '1';
+                    code_index <= code_index + 1;
+                when S_WAIT_PRINT =>
+                    DATA_EN <= '0';
+                when S_READ =>
+                    next_value := IN_DATA;
+                    DATA_WDATA <= IN_DATA;
+                    DATA_RDWR <= '1';
+                    DATA_ADDR <= tape_index;
+                when S_WAIT_READ =>
+                    IN_REQ <= '1';
+                when S_READ_TAPE_WAIT | S_NEXT_WAIT | S_PREV_WAIT =>
+                    DATA_EN <= '0'
             end case;
 
             state <= next_state;
-        end if;
-    end process;
-
-    process (EN, RST, DATA_RDATA, read_tape) is
-    begin
-        if RST = '1' then
-            value <= 0;
-        elsif EN = '1' and read_tape = '1' then
-            value <= DATA_RDATA;
+            value <= next_value;
         end if;
     end process;
 
     -- decoder
-    process (EN, RST, DATA_RDATA, decode) is
-        constant NEXTT : std_logic_vector(7 downto 0) := "0111110"; -- '>'
-        constant PREVT : std_logic_vector(7 downto 0) := "0111100"; -- '<'
-        constant INC   : std_logic_vector(7 downto 0) := "0101011"; -- '+'
-        constant DEC   : std_logic_vector(7 downto 0) := "0101101"; -- '-'
-        constant IFEZ  : std_logic_vector(7 downto 0) := "1011011"; -- '['
-        constant IFNZ  : std_logic_vector(7 downto 0) := "1011101"; -- ']'
-        constant BREAK : std_logic_vector(7 downto 0) := "1111110"; -- '~'
-        constant PRINT : std_logic_vector(7 downto 0) := "0101110"; -- '.'
-        constant READT : std_logic_vector(7 downto 0) := "0101100"; -- ','
-        constant TAPE  : std_logic_vector(7 downto 0) := "1000000"; -- '@'
+    process (EN, RESET, DATA_RDATA, decode) is
+        constant NEXTT : std_logic_vector(7 downto 0) := "00111110"; -- '>'
+        constant PREVT : std_logic_vector(7 downto 0) := "00111100"; -- '<'
+        constant INC   : std_logic_vector(7 downto 0) := "00101011"; -- '+'
+        constant DEC   : std_logic_vector(7 downto 0) := "00101101"; -- '-'
+        constant IFEZ  : std_logic_vector(7 downto 0) := "01011011"; -- '['
+        constant IFNZ  : std_logic_vector(7 downto 0) := "01011101"; -- ']'
+        constant BREAK : std_logic_vector(7 downto 0) := "01111110"; -- '~'
+        constant PRINT : std_logic_vector(7 downto 0) := "00101110"; -- '.'
+        constant READT : std_logic_vector(7 downto 0) := "00101100"; -- ','
+        constant TAPE  : std_logic_vector(7 downto 0) := "01000000"; -- '@'
     begin
-        if RST = '1' then
+        if RESET = '1' then
             decoded <= I_COMMENT;
         elsif EN = '1' and decode = '1' then
             decoded <= I_COMMENT;
@@ -249,6 +302,8 @@ begin
                     decoded <= I_READ;
                 when TAPE =>
                     decoded <= I_TAPE;
+                when others =>
+                    decoded <= I_COMMENT;
             end case;
         end if;
     end process;

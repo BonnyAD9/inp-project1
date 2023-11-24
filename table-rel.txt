@@ -1,0 +1,58 @@
+0 1 2
+@
+
+state  READ i is code tape v tb0  tb1  Dstate read write wdata Dcode Dtape Dv Dis Dtb r/f
+INIT1  ?    ? -  0    0    ? halt halt INIT2  tape -     -     -     +1    -  -   <<  -
+INIT2  ?    ? -  0    1    ? halt halt INIT   tape -     -     -     +1    -  -   <<  -
+INIT   [0]  @ -  0    2    ? halt halt FETCH0 code -     -     +1    -1    -  -   <<  r
+FETCH0 [1]  c -  1    1    ? halt halt EXEC0  code -     -     +1    -     R  -   <<  r
+EXEC0  [0]  @ -  2    1    0 halt halt HALT   -    -     -     -     -     -  -   <<  rf
+HALT
+
+0 1 2 3 4 5
++ + + @
+
+state  READ i is code tape v tb0   tb1   Dstate read write wdata Dcode Dtape Dv Dis Dtb1  r/f
+INIT   ?    ? -  0    0    ? halt  halt  INIT   tape -     -     -     +1    -  -   -     -
+INIT   ?    ? -  0    1    ? halt  halt  INIT   tape -     -     -     +1    -  -   -     -
+INIT   [0]  + -  0    2    ? halt  halt  INIT   tape -     -     -     +1    -  -   -     -
+INIT   [1]  + -  0    3    ? halt  halt  INIT   tape -     -     -     +1    -  -   -     -
+INIT   [2]  + -  0    4    ? halt  halt  INIT   tape -     -     -     +1    -  -   -     -
+INIT   [3]  @ -  0    5    ? halt  halt  FETCH0 code -     -     +1    -1    -  -   -     r
+FETCH0 [4]  ? -  1    4    ? halt  halt  FETCH1 code -     -     +1    -     R  -   -     r
+FETCH1 [0]  + -  2    4    0 halt  halt  ADD    -    tape  v+1   -     -     +1 -   fetch r
+ADD    [1]  + -  2    4    1 halt  fetch ADD    -    tape  v+1   -     -     +1 -   fetch r
+ADD    ?    ? -  2    4    2 fetch fetch FETCH  code -     -     +1    -     -  -   -     r
+FETCH  ?    ? -  3    4    2 fetch halt  FETCH  code -     -     +1    -     -  -   -     r
+FETCH  [2]  + -  4    4    2 halt  halt  ADD    -    tape  v+1   -     -     +1 -   fetch r
+ADD    [3]  @ -  4    4    3 halt  fetch HALT   -    -     -     -     -     -  -   -     rf
+HALT
+
+0 1 2 3 4
+> + @
+
+state  READ i is code tape v tb0  tb1   Dstate  read   write wdata Dcode Dtape Dv   Dis Dtb1  r/f
+INIT1  ?    ? ?  0    0    ? halt halt  INIT2   tape   -     -     -     +1    -    -   -     -
+INIT2  ?    ? ?  0    1    ? halt halt  INIT    tape   -     -     -     +1    -    -   -     -
+INIT   [0]  > ?  0    2    ? halt halt  INIT    tape   -     -     -     +1    -    -   -     -
+INIT   [1]  + ?  0    3    ? halt halt  INIT    tape   -     -     -     +1    -    -   -     -
+INIT   [2]  @ ?  0    4    ? halt halt  FETCH0  code   -     -     +1    -1    -    -   -     r
+FETCH0 [3]  ? ?  1    3    0 halt halt  FETCH1  code   -     -     +1    -     R    -   -     r
+FETCH1 [0]  > ?  2    3    0 halt halt  NEXT    tape+1 -     -     -     +1    -    -   -     r
+NEXT   [1]  + ?  2    4    0 halt halt  VDELAY  code   -     -     +1    -     -    i   -     r
+VDELAY [4]  ? +  3    4    0 halt halt  is(ADD) -      tape  v+1   -     -     R!+1 -   fetch r
+ADD    [2]  @ +  3    4    1 halt fetch HALT    -      -     -     -     -     -    -   -     rf
+HALT
+
+0 1 2 3 4 5 6 7
+. + . @ 0
+
+state  READ i is code tape v tr tb0  tb1   Dstate  read   write wdata Dcode Dtape Dv   Dis Dtb1  t r/f
+INIT1  ?    ? ?  0    0    ? 0  halt halt  INIT2   tape   -     -     -     +1    -    -   -     - -
+INIT2  ?    ? ?  0    1    ? 0  halt halt  INIT    tape   -     -     -     +1    -    -   -     - -
+INIT   [0]  . ?  0    2    ? 0  halt halt  INIT    tape   -     -     -     +1    -    -   -     - -
+INIT   [1]  + ?  0    3    ? 0  halt halt  INIT    tape   -     -     -     +1    -    -   -     - -
+INIT   [2]  . ?  0    4    ? 0  halt halt  INIT    tape   -     -     -     +1    -    -   -     - -
+INIT   [3]  @ ?  0    5    ? 0  halt halt  FETCH0  code   -     -     +1    -1    -    -   -     - r
+FETCH0 [4]  0 ?  1    4    ? 0  halt halt  FETCH1  code   -     -     +1    -     R    -   -     - r
+FETCH1 [0]  . ?  2    4    0 0  halt halt  READ
