@@ -68,21 +68,20 @@ architecture behavioral of cpu is
     type State_t is (
         S_INIT_START,
         S_INIT_FETCH,
-        S_INIT_DECODE,
         S_INIT,
         S_FETCH,
         S_DECODE,
-        S_NEXT,
+        S_NEXT_LOAD,
+        S_NEXT_FETCH,
         S_NEXT_SAVE,
-        S_PREV,
+        S_PREV_LOAD,
+        S_PREV_FETCH,
         S_PREV_SAVE,
         S_INC,
         S_DEC,
         S_JFORW_FETCH,
-        S_JFORW_DECODE,
         S_JFORW,
         S_JBACK_FETCH,
-        S_JBACK_DECODE,
         S_JBACK,
         S_PRINT_WAIT,
         S_PRINT,
@@ -115,8 +114,9 @@ architecture behavioral of cpu is
 begin
     -- FSM
     process (CLK, RESET, EN) is
-        variable next_state : State_t;
+        variable next_state  : State_t;
         variable next_value  : std_logic_vector(7 downto 0);
+        variable choose_inst : std_logic;
     begin
         if RESET = '1' then
             state <= S_INIT_START;
@@ -130,95 +130,57 @@ begin
             READY <= '0';
         elsif rising_edge(CLK) and EN = '1' then
             next_state := state;
+            choose_inst := '0';
 
             case state is
                 when S_INIT_START =>
                     next_state := S_INIT_FETCH;
                 when S_INIT_FETCH =>
-                    next_state := S_INIT_DECODE;
-                when S_INIT_DECODE =>
                     next_state := S_INIT;
                 when S_INIT =>
                     if decoded = I_TAPE then
                         next_state := S_FETCH;
                     end if;
-                when S_FETCH:
+                when S_FETCH =>
                     next_state := S_DECODE;
-                when S_DECODE:
-                    next_state := S_EXEC;
-                when S_EXEC:
-                    case decoded is
-                        I_NEXT =>
-                            next_state := S_NEXT;
-                        I_PREV =>
-                            next_state := S_PREV;
-                        I_INC =>
-                            next_state := S_INC;
-                        I_DEC =>
-                            next_state := S_DEC;
-                        I_IFEZ =>
-                            if value = 0 then
-                                next_state := S_JFORW_FETCH;
-                            else
-                                next_state := S_FETCH;
-                            end if;
-                        I_IFNZ =>
-                            if value /= 0 then
-                                next_state := S_JBACK_FETCH;
-                            else
-                                next_state := S_FETCH;
-                            end if;
-                        I_BREAK =>
-                            next_state := S_JFORW_FETCH;
-                        I_PRINT =>
-                            if OUT_BUSY = 0 then
-                                next_state := S_PRINT;
-                            else
-                                next_state := S_PRINT_WAIT;
-                            end if;
-                        I_READ =>
-                            next_state := S_READ_WAIT;
-                        I_TAPE =>
-                            next_state := S_FINISH;
-                        I_COMMENT =>
-                            next_state := S_FETCH;
-                    end case;
-                when S_NEXT =>
+                when S_DECODE =>
+                    choose_inst := '1';
+                when S_NEXT_LOAD =>
+                    next_state := S_NEXT_FETCH;
+                when S_NEXT_FETCH =>
                     next_state := S_NEXT_SAVE;
                 when S_NEXT_SAVE =>
-                    next_state := S_EXEC;
-                when S_PREV =>
+                    choose_inst := '1';
+                when S_PREV_LOAD =>
+                    next_state := S_PREV_FETCH;
+                when S_PREV_FETCH =>
                     next_state := S_PREV_SAVE;
                 when S_PREV_SAVE =>
-                    next_state := S_EXEC;
+                    choose_inst := '1';
                 when S_INC =>
                     next_state := S_DECODE;
                 when S_DEC =>
                     next_state := S_DECODE;
                 when S_JFORW_FETCH =>
-                    next_state := S_JFORW_DECODE;
-                when S_JFORW_DECODE =>
-                    next_state := S_JFORW_FETCH;
+                    next_state := S_JFORW;
                 when S_JFORW =>
                     if decoded = I_IFNZ then
-                        next_state := S_EXEC;
+                        choose_inst := '1';
                     end if;
                 when S_JBACK_FETCH =>
-                    next_state := S_JBACK_DECODE;
-                when S_JBACK_DECODE =>
                     next_state := S_JBACK;
                 when S_JBACK =>
                     if decoded = I_IFEZ then
                         next_state := S_FETCH;
                     end if;
                 when S_PRINT_WAIT =>
-                    if OUT_BUSY = 0 then
+                    if OUT_BUSY = '0' then
                         next_state := S_PRINT;
                     end if;
                 when S_PRINT =>
                     next_state := S_DECODE;
                 when S_READ_WAIT =>
-                    if IN_VLD = 1 then
+                    if IN_VLD = '1' then
                         next_state := S_READ;
                     end if;
                 when S_READ =>
@@ -228,9 +190,49 @@ begin
                 when S_HALT =>
             end case;
 
+            if choose_inst = '1' then
+                case decoded is
+                    when I_NEXT =>
+                        next_state := S_NEXT_LOAD;
+                    when I_PREV =>
+                        next_state := S_PREV_LOAD;
+                    when I_INC =>
+                        next_state := S_INC;
+                    when I_DEC =>
+                        next_state := S_DEC;
+                    when I_IFEZ =>
+                        if value = 0 then
+                            next_state := S_JFORW_FETCH;
+                        else
+                            next_state := S_FETCH;
+                        end if;
+                    when I_IFNZ =>
+                        if value /= 0 then
+                            next_state := S_JBACK_FETCH;
+                        else
+                            next_state := S_FETCH;
+                        end if;
+                    when I_BREAK =>
+                        next_state := S_JFORW_FETCH;
+                    when I_PRINT =>
+                        if OUT_BUSY = '0' then
+                            next_state := S_PRINT;
+                        else
+                            next_state := S_PRINT_WAIT;
+                        end if;
+                    when I_READ =>
+                        next_state := S_READ_WAIT;
+                    when I_TAPE =>
+                        next_state := S_FINISH;
+                    when I_COMMENT =>
+                        next_state := S_FETCH;
+                end case;
+            end if;
+
             DATA_ADDR <= code_index;
             DATA_EN <= '1';
             DATA_RDWR <= '0';
+            DATA_WDATA <= value;
             IN_REQ <= '0';
             OUT_DATA <= value;
             OUT_WE <= '0';
@@ -239,32 +241,117 @@ begin
             decode <= '1';
 
             case next_state is
-                when S_INIT_START =>
+                when S_INIT_START => -- this case should never happen
                     READY <= '0';
                     DATA_EN <= '0';
                     decode <= '0';
                 when S_INIT_FETCH =>
+                    -- fetch the first byte
                     READY <= '0';
                     DATA_ADDR <= tape_index;
                     decode <= '0';
-                when S_INIT_DECODE =>
-                    READY <= '0';
-                    DATA_ADDR <= tape_index + 1;
-                    tape_index <= tape_index + 1;
                 when S_INIT =>
+                    -- fetch bytes until decoded byte is @
                     READY <= '0';
                     DATA_ADDR <= tape_index + 1;
                     tape_index <= tape_index + 1;
                 when S_FETCH =>
+                    -- fetch instruction
                     decode <= '0';
                 when S_DECODE =>
-                    DATA_EN <= '0';
+                    -- decode the instruction
                     code_index <= code_index + 1;
-                when S_
+                    DATA_EN <= '0';
+                -- move tape forward
+                when S_NEXT_LOAD =>
+                    -- fetch value at the next tape index
+                    decode <= '0';
+                    DATA_ADDR <= tape_index + 1;
+                when S_NEXT_FETCH =>
+                    -- fetch next instruction
+                    -- (value from tape will arive next tick)
+                    decode <= '0';
+                when S_NEXT_SAVE =>
+                    -- value from next tape has arrived
+                    -- save the current value and update it with the new value
+                    -- decode the instruction that will arrive next tick
+                    DATA_ADDR <= tape_index;
+                    tape_index <= tape_index + 1;
+                    DATA_RDWR <= '1';
+                    value <= DATA_RDATA;
+                -- move tape backward
+                when S_PREV_LOAD =>
+                    -- fetch the value at the previous tape index
+                    decode <= '0';
+                    DATA_ADDR <= tape_index - 1;
+                when S_PREV_FETCH =>
+                    -- fetch the next instruction
+                    -- (value from tape will arive next tick)
+                    decode <= '0';
+                when S_PREV_SAVE =>
+                    -- value from tape has arrived
+                    -- save the current value and update it with the new value
+                    -- decode the instruction that will arrive next tick
+                    DATA_ADDR <= tape_index;
+                    tape_index <= tape_index + 1;
+                    DATA_RDWR <= '1';
+                    value <= DATA_RDATA;
+                when S_INC =>
+                    -- increment the value, fetch the next instruction
+                    value <= value + 1;
+                    decode <= '0';
+                when S_DEC =>
+                    -- decrement the value, fetch the next instruction
+                    value <= value - 1;
+                    decode <= '0';
+                when S_JFORW_FETCH =>
+                    -- fetch the next instruction
+                    decode <= '0';
+                when S_JFORW =>
+                    -- fetch the next instruciton
+                    -- decode instruction that will arrive the next tick
+                    code_index <= code_index + 1;
+                when S_JBACK_FETCH =>
+                    -- fetch the previous instruction
+                    decode <= '0';
+                    DATA_ADDR <= code_index - 2;
+                when S_JBACK =>
+                    -- fetch the previous instruction
+                    -- decode instruciton that will arrive the next tick
+                    DATA_ADDR <= code_index - 3;
+                    code_index <= code_index - 1;
+                when S_PRINT_WAIT =>
+                    -- wait for the output device
+                    decode <= '0';
+                    DATA_EN <= '0';
+                when S_PRINT =>
+                    -- write to output
+                    -- fetch next instruciton
+                    OUT_DATA <= value;
+                    OUT_WE <= '1';
+                    DATA_EN <= '0';
+                    decode <= '0';
+                when S_READ_WAIT =>
+                    -- wait for the input
+                    IN_REQ <= '1';
+                    DATA_EN <= '0';
+                    decode <= '0';
+                when S_READ =>
+                    -- read the data, fetch next instruction
+                    value <= IN_DATA;
+                    decode <= '0';
+                when S_FINISH =>
+                    -- store the value
+                    DATA_ADDR <= tape_index;
+                    DATA_RDWR <= '1';
+                    decode <= '0';
+                when S_HALT =>
+                    DATA_EN <= '0';
+                    decode <= '0';
+                    DONE <= '1';
             end case;
 
             state <= next_state;
-            value <= next_value;
         end if;
     end process;
 
