@@ -105,7 +105,7 @@ architecture behavioral of cpu is
         I_BREAK,  -- '~'
         I_PRINT,  -- '.'
         I_READ,   -- ','
-        I_TAPE,   -- '@'
+        I_HALT,   -- '@'
         I_COMMENT -- other
     );
 
@@ -142,7 +142,7 @@ begin
                 when S_INIT_FETCH =>
                     next_state := S_INIT;
                 when S_INIT =>
-                    if decoded = I_TAPE then
+                    if decoded = I_HALT then
                         next_state := S_INIT_FINISH_WAIT;
                     end if;
                 when S_INIT_FINISH_WAIT =>
@@ -256,7 +256,7 @@ begin
                         end if;
                     when I_READ =>
                         next_state := S_READ_WAIT_DECODE;
-                    when I_TAPE =>
+                    when I_HALT =>
                         next_state := S_FINISH;
                     when I_COMMENT =>
                         next_state := S_FETCH;
@@ -463,7 +463,7 @@ begin
                 when READT =>
                     decoded <= I_READ;
                 when TAPE =>
-                    decoded <= I_TAPE;
+                    decoded <= I_HALT;
                 when others =>
                     decoded <= I_COMMENT;
             end case;
