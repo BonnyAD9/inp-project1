@@ -74,20 +74,22 @@ architecture behavioral of cpu is
         S_FETCH,
         S_DECODE,
         S_NEXT_LOAD,
-        S_NEXT_FETCH,
         S_NEXT_SAVE,
+        S_NEXT_DECODE,
         S_PREV_LOAD,
-        S_PREV_FETCH,
         S_PREV_SAVE,
+        S_PREV_DECODE,
         S_INC,
         S_DEC,
-        S_JFORW_FETCH,
         S_JFORW,
         S_JBACK_FETCH,
         S_JBACK,
         S_PRINT_WAIT,
+        S_PRINT_WAIT_DECODE,
         S_PRINT,
+        S_PRINT_DECODE,
         S_READ_WAIT,
+        S_READ_WAIT_DECODE,
         S_READ,
         S_FINISH,
         S_HALT
@@ -152,26 +154,24 @@ begin
                 when S_DECODE =>
                     choose_inst := '1';
                 when S_NEXT_LOAD =>
-                    next_state := S_NEXT_FETCH;
-                when S_NEXT_FETCH =>
                     next_state := S_NEXT_SAVE;
                 when S_NEXT_SAVE =>
+                    next_state := S_NEXT_DECODE;
+                when S_NEXT_DECODE =>
                     choose_inst := '1';
                 when S_PREV_LOAD =>
-                    next_state := S_PREV_FETCH;
-                when S_PREV_FETCH =>
                     next_state := S_PREV_SAVE;
                 when S_PREV_SAVE =>
+                    next_state := S_PREV_DECODE;
+                when S_PREV_DECODE =>
                     choose_inst := '1';
                 when S_INC =>
-                    next_state := S_DECODE;
+                    choose_inst := '1';
                 when S_DEC =>
-                    next_state := S_DECODE;
-                when S_JFORW_FETCH =>
-                    next_state := S_JFORW;
+                    choose_inst := '1';
                 when S_JFORW =>
                     if decoded = I_IFNZ then
-                        choose_inst := '1';
+                        next_state := S_DECODE;
                     end if;
                 when S_JBACK_FETCH =>
                     next_state := S_JBACK;
@@ -183,14 +183,28 @@ begin
                     if OUT_BUSY = '0' then
                         next_state := S_PRINT;
                     end if;
+                when S_PRINT_WAIT_DECODE =>
+                    if OUT_BUSY = '0' then
+                        next_state := S_PRINT;
+                    else
+                        next_state := S_PRINT_WAIT;
+                    end if;
                 when S_PRINT =>
-                    next_state := S_DECODE;
+                    choose_inst := '1';
+                when S_PRINT_DECODE =>
+                    choose_inst := '1';
                 when S_READ_WAIT =>
                     if IN_VLD = '1' then
                         next_state := S_READ;
                     end if;
+                when S_READ_WAIT_DECODE =>
+                    if IN_VLD = '1' then
+                        next_state := S_READ;
+                    else
+                        next_state := S_READ_WAIT;
+                    end if;
                 when S_READ =>
-                    next_state := S_DECODE;
+                    choose_inst := '1';
                 when S_FINISH =>
                     next_state := S_HALT;
                 when S_HALT =>
@@ -208,9 +222,13 @@ begin
                         next_state := S_DEC;
                     when I_IFEZ =>
                         if value = 0 then
-                            next_state := S_JFORW_FETCH;
+                            if decoded = I_IFNZ then
+                                next_state := S_DECODE;
+                            else
+                                next_state := S_JFORW;
+                            end if;
                         else
-                            next_state := S_FETCH;
+                            next_state := S_DECODE;
                         end if;
                     when I_IFNZ =>
                         if value /= 0 then
@@ -219,15 +237,25 @@ begin
                             next_state := S_FETCH;
                         end if;
                     when I_BREAK =>
-                        next_state := S_JFORW_FETCH;
+                        if decoded = I_IFNZ then
+                            next_state := S_DECODE;
+                        else
+                            next_state := S_JFORW;
+                        end if;
                     when I_PRINT =>
                         if OUT_BUSY = '0' then
-                            next_state := S_PRINT;
+                            if state = S_PRINT_DECODE or state = S_PRINT then
+                                -- OUT_BUSY wouldn't be yet updated, so we need
+                                -- to wait
+                                next_state := S_PRINT_WAIT_DECODE;
+                            else
+                                next_state := S_PRINT_DECODE;
+                            end if;
                         else
-                            next_state := S_PRINT_WAIT;
+                            next_state := S_PRINT_WAIT_DECODE;
                         end if;
                     when I_READ =>
-                        next_state := S_READ_WAIT;
+                        next_state := S_READ_WAIT_DECODE;
                     when I_TAPE =>
                         next_state := S_FINISH;
                     when I_COMMENT =>
@@ -271,61 +299,64 @@ begin
                     -- decode the first instruction
                     value <= DATA_RDATA;
                     code_index <= code_index + 1;
-                    DATA_EN <= '0';
+                    DATA_ADDR <= code_index + 1;
                 when S_FETCH =>
                     -- fetch instruction
                     decode <= '0';
                 when S_DECODE =>
                     -- decode the instruction
                     code_index <= code_index + 1;
-                    DATA_EN <= '0';
+                    DATA_ADDR <= code_index + 1;
                 -- move tape forward
                 when S_NEXT_LOAD =>
                     -- fetch value at the next tape index
-                    decode <= '0';
+                    -- decode the current instruction
                     DATA_ADDR <= tape_index + 1;
-                when S_NEXT_FETCH =>
-                    -- fetch next instruction
-                    -- (value from tape will arive next tick)
-                    decode <= '0';
+                    code_index <= code_index + 1;
                 when S_NEXT_SAVE =>
-                    -- value from next tape has arrived
-                    -- save the current value and update it with the new value
-                    -- decode the instruction that will arrive next tick
+                    -- (value from tape will arive next tick)
+                    -- save the current value
                     DATA_ADDR <= tape_index;
                     tape_index <= tape_index + 1;
-                    code_index <= code_index + 1;
                     DATA_RDWR <= '1';
+                    decode <= '0';
+                when S_NEXT_DECODE =>
+                    -- save the new value from tape
+                    -- the code is already decoded, just fetch next instruction
                     value <= DATA_RDATA;
+                    decode <= '0';
                 -- move tape backward
                 when S_PREV_LOAD =>
                     -- fetch the value at the previous tape index
-                    decode <= '0';
+                    -- decode the current instruction
                     DATA_ADDR <= tape_index - 1;
-                when S_PREV_FETCH =>
-                    -- fetch the next instruction
-                    -- (value from tape will arive next tick)
-                    decode <= '0';
+                    code_index <= code_index + 1;
                 when S_PREV_SAVE =>
-                    -- value from tape has arrived
-                    -- save the current value and update it with the new value
-                    -- decode the instruction that will arrive next tick
+                    -- (value from tape will arive next tick)
+                    -- save the current value
                     DATA_ADDR <= tape_index;
                     tape_index <= tape_index - 1;
-                    code_index <= code_index + 1;
                     DATA_RDWR <= '1';
-                    value <= DATA_RDATA;
-                when S_INC =>
-                    -- increment the value, fetch the next instruction
-                    value <= value + 1;
                     decode <= '0';
+                when S_PREV_DECODE =>
+                    -- save the new value from tape
+                    -- the code is already decoded, just fetch next instruction
+                    value <= DATA_RDATA;
+                    decode <= '0';
+                when S_INC =>
+                    -- increment the value
+                    -- fetch the next instruction
+                    -- decode the current instruction
+                    value <= value + 1;
+                    DATA_ADDR <= code_index + 1;
+                    code_index <= code_index + 1;
                 when S_DEC =>
                     -- decrement the value, fetch the next instruction
-                    value <= value - 1;
-                    decode <= '0';
-                when S_JFORW_FETCH =>
                     -- fetch the next instruction
-                    decode <= '0';
+                    -- decode the current instruction
+                    value <= value - 1;
+                    DATA_ADDR <= code_index + 1;
+                    code_index <= code_index + 1;
                 when S_JFORW =>
                     -- fetch the next instruciton
                     -- decode instruction that will arrive the next tick
@@ -344,19 +375,40 @@ begin
                     -- wait for the output device
                     decode <= '0';
                     DATA_EN <= '0';
+                when S_PRINT_WAIT_DECODE =>
+                    -- wait for the output device
+                    -- decode the current instruction
+                    DATA_EN <= '0';
+                    DATA_ADDR <= code_index + 1;
+                    code_index <= code_index + 1;
                 when S_PRINT =>
                     -- write to output
                     -- fetch next instruciton
                     OUT_DATA <= value;
                     OUT_WE <= '1';
                     decode <= '0';
+                when S_PRINT_DECODE =>
+                    -- write to output
+                    -- fetch next instruciton
+                    -- decode the current instruction
+                    OUT_DATA <= value;
+                    OUT_WE <= '1';
+                    DATA_ADDR <= code_index + 1;
+                    code_index <= code_index + 1;
                 when S_READ_WAIT =>
                     -- wait for the input
                     IN_REQ <= '1';
                     DATA_EN <= '0';
                     decode <= '0';
+                when S_READ_WAIT_DECODE =>
+                    -- wait for the input
+                    -- decode current instruction
+                    IN_REQ <= '1';
+                    DATA_EN <= '0';
+                    code_index <= code_index + 1;
                 when S_READ =>
-                    -- read the data, fetch next instruction
+                    -- read the data
+                    -- fetch next instruction
                     value <= IN_DATA;
                     decode <= '0';
                 when S_FINISH =>
