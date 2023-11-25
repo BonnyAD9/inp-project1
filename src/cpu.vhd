@@ -69,6 +69,8 @@ architecture behavioral of cpu is
         S_INIT_START,
         S_INIT_FETCH,
         S_INIT,
+        S_INIT_FINISH_WAIT,
+        S_INIT_FINISH,
         S_FETCH,
         S_DECODE,
         S_NEXT_LOAD,
@@ -139,8 +141,12 @@ begin
                     next_state := S_INIT;
                 when S_INIT =>
                     if decoded = I_TAPE then
-                        next_state := S_FETCH;
+                        next_state := S_INIT_FINISH_WAIT;
                     end if;
+                when S_INIT_FINISH_WAIT =>
+                    next_state := S_INIT_FINISH;
+                when S_INIT_FINISH =>
+                    choose_inst := '1';
                 when S_FETCH =>
                     next_state := S_DECODE;
                 when S_DECODE =>
@@ -255,6 +261,17 @@ begin
                     READY <= '0';
                     DATA_ADDR <= tape_index + 1;
                     tape_index <= tape_index + 1;
+                when S_INIT_FINISH_WAIT =>
+                    -- wait for the initial tape value
+                    -- fetch the first instruction
+                    READY <= '0';
+                    decode <= '0';
+                when S_INIT_FINISH =>
+                    -- set the initial value
+                    -- decode the first instruction
+                    value <= DATA_RDATA;
+                    code_index <= code_index + 1;
+                    DATA_EN <= '0';
                 when S_FETCH =>
                     -- fetch instruction
                     decode <= '0';
@@ -277,6 +294,7 @@ begin
                     -- decode the instruction that will arrive next tick
                     DATA_ADDR <= tape_index;
                     tape_index <= tape_index + 1;
+                    code_index <= code_index + 1;
                     DATA_RDWR <= '1';
                     value <= DATA_RDATA;
                 -- move tape backward
@@ -293,7 +311,8 @@ begin
                     -- save the current value and update it with the new value
                     -- decode the instruction that will arrive next tick
                     DATA_ADDR <= tape_index;
-                    tape_index <= tape_index + 1;
+                    tape_index <= tape_index - 1;
+                    code_index <= code_index + 1;
                     DATA_RDWR <= '1';
                     value <= DATA_RDATA;
                 when S_INC =>
@@ -311,6 +330,7 @@ begin
                     -- fetch the next instruciton
                     -- decode instruction that will arrive the next tick
                     code_index <= code_index + 1;
+                    DATA_ADDR <= code_index + 1;
                 when S_JBACK_FETCH =>
                     -- fetch the previous instruction
                     decode <= '0';
@@ -329,7 +349,6 @@ begin
                     -- fetch next instruciton
                     OUT_DATA <= value;
                     OUT_WE <= '1';
-                    DATA_EN <= '0';
                     decode <= '0';
                 when S_READ_WAIT =>
                     -- wait for the input

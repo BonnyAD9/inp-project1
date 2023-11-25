@@ -118,6 +118,23 @@ async def test_printf(dut):
     instcnt, mem, lcd = await run_program(dut, prog, kb_data=chr(123), timeout_ns = 1_000_000)
     assert lcd == '123', "Invalid output"
 
+@tb_test()
+async def test_log(dut):
+    """Print data to the output, i.e. putchar(*ptr)"""
+    instcnt, mem, lcd = await run_program(dut, '+++++++++++++++[>++++++++>+++++++>+++<<<-]>.-----.+.>.--.+++++.>+++..@', timeout_ns=250_000)
+    assert lcd == "xstigl00"
+
+@tb_test()
+async def test_num(dut):
+    """Print data to the output, i.e. putchar(*ptr)"""
+    instcnt, mem, lcd = await run_program(dut, '>++++++++++[<.+>-]@0', timeout_ns=250_000)
+    assert lcd == "0123456789"
+
+@tb_test()
+async def test_move_save(dut):
+    """Print data to the output, i.e. putchar(*ptr)"""
+    instcnt, mem, lcd = await run_program(dut, '+><.@0', timeout_ns=250_000)
+    assert lcd == "1"
 
 
 if __name__=="__main__":
